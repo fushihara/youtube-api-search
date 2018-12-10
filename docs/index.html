@@ -252,7 +252,7 @@
     localStorage[localStorageQuerySaveKey] = data;
   }
   function 今の保存設定を取得() {
-    const data = JSON.parse(localStorage[`${localStorageKey}-data`] || "");
+    const data = JSON.parse(localStorage[`${localStorageKey}-data`] || "{}");
     if (typeof data == "object") {
       return data;
     } else {
