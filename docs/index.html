@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<style>
+  *{word-break: break-all;box-sizing: border-box;margin:0;padding:0;}
+ .get-code{
+   width:500px;
+ }
+</style>
+<script>
+  NodeList.prototype.forEach = Array.prototype.forEach;
+  const localStorageKey = `oey8yk69`;// google apiのアクセストークン等
+  const localStorageNgChannelKey = `3f62f06j`;//NGチャンネル一覧。無数に増える
+  const localStorageQuerySaveKey = `ncamp558`;// 検索クエリの復元用
+  const localStorageVideoFavoriteKey = `k1lmf5q3`;//動画ごとのfavの色。無数に増える。
+  const お気に入りで使える色一覧 = [];
+  for (let i = 0; i <= 360; i += 50) {
+    お気に入りで使える色一覧.push(`hsla(${i}, 100%, 90%, 1)`);
+  }
+  const 使っているlocalStorageの接頭語 = [localStorageKey, localStorageNgChannelKey, localStorageQuerySaveKey, localStorageVideoFavoriteKey];
+  let アクセストークン自動更新が有効 = false;//trueにした段階でsetTimeoutを指定し、一度falseになったらリロードしない限り有効にはならん。
+  let 検索ボタン有効管理クラス;
+  window.addEventListener("DOMContentLoaded", (e) => {
+    // 変数名のインスタンスをセット
+    検索ボタン有効管理クラス = new 検索ボタン有効管理(
+      document.querySelector(".js-clear-search"),
+      document.querySelector(".js-add-search")
+    );
+    // エレメントにイベントをセット
+    検索UIのセットアップ(document.querySelector("#search-ui"));
+    document.querySelector(".js-start-oauth").addEventListener("click", () => {
+      oauth開始(
+        document.querySelector(".js-get-code .js-oauth-client-id").value,
+        document.querySelector(".js-get-code .js-oauth-client-secret").value,
+        document.querySelector(".js-get-code .js-oauth-redirect-url").value,
+        document.querySelector(".js-get-code .js-oauth-scope").value.split("\n").map(a => a.trim()),
+      );
+    });
+    document.querySelector(".js-get-access-token").addEventListener("click", () => {
+      アクセストークンを新規取得(
+        document.querySelector("#get-access-token .js-google-callback-code"),
+        document.querySelector("#get-access-token .js-oauth-client-id"),
+        document.querySelector("#get-access-token .js-oauth-client-secret"),
+        document.querySelector("#get-access-token .js-oauth-redirect-url"));
+    });
+    document.querySelector(".js-update-access-token").addEventListener("click", () => {
+      アクセストークンを更新(
+        document.querySelector("#update-access-token .js-oauth-refresh-token"),
+        document.querySelector("#update-access-token .js-oauth-client-id"),
+        document.querySelector("#update-access-token .js-oauth-client-secret"));
+    });
+    document.querySelector(".js-update-access-token-reset").addEventListener("click", () => {
+      if (confirm("今のトークンを破棄して取得し直してよろしいですか？") == false) {
+        return;
+      }
+      設定を保存({
+        アクセストークン: "",
+        リフレッシュトークン: ""
+      });
+      document.location.reload();
+    });
+    document.querySelector(".js-update-access-token-close").addEventListener("click", () => {
+      document.querySelector("#overlay-white").style.visibility = "hidden";
+      document.querySelector("#google-oauth-overlay").style.visibility = "hidden";
+    });
+    document.querySelector("#about-close").addEventListener("click", () => {
+      document.querySelector("#about-overlay").style.visibility = "hidden";
+    });
+    document.querySelector(".js-about").addEventListener("click", () => {
+      document.querySelector("#about-overlay").style.visibility = "";
+    });
+    document.querySelector(".js-token-config").addEventListener("click", () => {
+      document.querySelector("#overlay-white").style.visibility = "";
+      document.querySelector("#google-oauth-overlay").style.visibility = "";
+    });
+    document.querySelector(".js-open-import-export").addEventListener("click", () => {
+      document.querySelector("#import-export-value").value = エクスポートの値を作る();
+      document.querySelector("#import-export-overlay").style.visibility = "";
+    });
+    document.querySelector("#import-export-overlay-close").addEventListener("click", () => {
+      document.querySelector("#import-export-overlay").style.visibility = "hidden";
+    });
+    document.querySelector("#import-go").addEventListener("click", () => {
+      if (confirm("既存のデータを全て消して、importしてよろしいですか？") == false) {
+        return;
+      }
+      ローカルストレージをimportする(document.querySelector("#import-export-value").value);
+      document.location.reload();
+    });
+    // 設定を復元する
+    設定をエレメントに復元(
+      [...document.querySelectorAll(".js-oauth-client-id")],
+      [...document.querySelectorAll(".js-oauth-client-secret")],
+      [...document.querySelectorAll(".js-oauth-redirect-url")],
+      [...document.querySelectorAll(".js-oauth-scope")],
+      [...document.querySelectorAll(".js-oauth-refresh-token")],
+      [...document.querySelectorAll(".js-oauth-access-token")],
+      [...document.querySelectorAll(".js-oauth-access-token-expire-time")],
+    );
+    // urlにcode～がある時はその値を受信
+    const URLにcodeがある = document.location.href.match(/\?code=(.+?)&/) != null;
+    if (URLにcodeがある) {
+      const code = RegExp.$1;
+      document.querySelector(".js-google-callback-code").value = code;
+    }
+    // domの表示状態を更新
+    {
+      const oAuth認証開始view = document.querySelector("#get-code");
+      const アクセストークン取得view = document.querySelector("#get-access-token");
+      const アクセストークン更新view = document.querySelector("#update-access-token");
+      const setting = 今の保存設定を取得();
+      if (URLにcodeがある) {
+        // code～がある
+        oAuth認証開始view.style.display = "none";
+        アクセストークン取得view.style.display = "";
+        アクセストークン更新view.style.display = "none";
+      } else if (setting.アクセストークン && new Date().getTime() < setting.アクセストークン期限切れの時刻) {
+        // アクセストークンの値がある ＆ アクセストークンの有効時間内である。
+        oAuth認証開始view.style.display = "none";
+        アクセストークン取得view.style.display = "none";
+        アクセストークン更新view.style.display = "";
+        アクセストークン自動更新が有効 = true;
+        アクセストークンを自動更新する(document.querySelector(".js-update-access-token"), document.querySelector(".js-error-message"));
+        document.querySelector("#overlay-white").style.visibility = "hidden";
+        document.querySelector("#google-oauth-overlay").style.visibility = "hidden";
+      } else if (setting.リフレッシュトークン && new Date().getTime() < setting.リフレッシュトークン期限切れの時刻) {
+        // リフレッシュトークンの値がある ＆ リフレッシュトークンの有効時間内である
+        oAuth認証開始view.style.display = "none";
+        アクセストークン取得view.style.display = "none";
+        アクセストークン更新view.style.display = "";
+        アクセストークン自動更新が有効 = true;
+        アクセストークンを自動更新する(document.querySelector(".js-update-access-token"), document.querySelector(".js-error-message"));
+        document.querySelector("#overlay-white").style.visibility = "hidden";
+        document.querySelector("#google-oauth-overlay").style.visibility = "hidden";
+      } else {
+        // その他
+        oAuth認証開始view.style.display = "";
+        アクセストークン取得view.style.display = "none";
+        アクセストークン更新view.style.display = "none";
+      }
+    }
+    // 1076327949528-kne27hj7gu92j39i nlv2jcho4jd5qi75.apps.googleusercontent.com
+    // http://localhost:8080/
+    // https://www.googleapis.com/auth/youtube
+    // Z8ZGl76V17uNwVyQJddvwhTC
+    // 画面表示を切り替え
+  }, false);
+  function エクスポートの値を作る() {
+    const result = [];
+    for (let i = 0; i < localStorage.length; ++i) {
+      const key = localStorage.key(i);
+      const val = localStorage.getItem(key);
+      if (使っているlocalStorageの接頭語.find(a => key.startsWith(a))) {
+        result.push({
+          key, val
+        });
+      }
+    }
+    const textAll = JSON.stringify(result);
+    const textAllLength = textAll.length;
+    const resultArray = [];
+    const 行あたりの文字数 = 500;
+    for (let i = 0; i < textAllLength; i += 行あたりの文字数) {
+      resultArray.push(textAll.substr(i, 行あたりの文字数));
+    }
+    return resultArray.join("\n");
+  }
+  function ローカルストレージをimportする(text) {
+    // まず、改行を潰す
+    text = text.replace(/\n/g, "");
+    let loadObj;
+    try {
+      loadObj = JSON.parse(text);
+    } catch (e) {
+      alert("jsonの読み込みに失敗しました。");
+      return;
+    }
+    if (Array.isArray(loadObj) == false) {
+      alert("jsonの読み込みに失敗しました。");
+      return;
+    }
+    //既存のセッションのデータを消す。
+    const 消す対象のセッションのキー一覧 = [];
+    for (let i = 0; i < localStorage.length; ++i) {
+      const key = localStorage.key(i);
+      if (使っているlocalStorageの接頭語.find(a => key.startsWith(a))) {
+        消す対象のセッションのキー一覧.push(key);
+      }
+    }
+    for (let i of 消す対象のセッションのキー一覧) {
+      localStorage.removeItem(i);
+    }
+    for (let i of loadObj) {
+      const key = i.key;
+      const val = i.val;
+      localStorage.setItem(key, val);
+    }
+  }
+  function アクセストークンを自動更新する(トークン更新ボタン, エラーメッセージdom) {
+    if (アクセストークン自動更新が有効 == false) { return; }
+    const setting = 今の保存設定を取得();
+    if (!setting.リフレッシュトークン || setting.リフレッシュトークン期限切れの時刻 < new Date().getTime()) {
+      // リフレッシュトークンがなかったらどうしようもない。
+      アクセストークン自動更新が有効 = false;
+      トークン更新ボタン.disabled = true;
+      トークン更新ボタン.style.opacity = ".5";
+      エラーメッセージdom.innerText = "リフレッシュトークンが期限切れです";
+      return;
+    }
+    // アクセストークンの期限切れ1分前以前だったら、まだ更新する時ではないので次に回す。
+    if (setting.アクセストークン && new Date().getTime() < setting.アクセストークン期限切れの時刻 - (60 * 1000)) {
+      setTimeout(() => {
+        アクセストークンを自動更新する(トークン更新ボタン, エラーメッセージdom);
+      }, 10 * 1000);
+      return;
+    }
+    // それ以外だったら更新する。
+    トークン更新ボタン.click();
+    setTimeout(() => {
+      アクセストークンを自動更新する(トークン更新ボタン, エラーメッセージdom);
+    }, 10 * 1000);
+  }
+  function 検索条件を復元する(検索対象inputs, ソートinputs, チャンネルinput, キーワードinput, 期間絞るcheck, 期間fromInput, 期間toInput) {
+    const data = JSON.parse(localStorage[localStorageQuerySaveKey] || "{}");
+    if (typeof data != "object") { return; }
+    // この値は全部あるかないかのはずなので、適当に数個だけ
+    if (data.検索対象 === undefined) { return; }
+    if (data.ソート === undefined) { return; }
+    if (data.チャンネル === undefined) { return; }
+    検索対象inputs.forEach(a => {
+      a.checked = a.value == data.検索対象;
+    });
+    ソートinputs.forEach(a => {
+      a.checked = a.value == data.ソート;
+    });
+    チャンネルinput.value = data.チャンネル;
+    キーワードinput.value = data.キーワード;
+    期間絞るcheck.checked = data.期間絞る;
+    期間fromInput.value = data.期間from;
+    期間toInput.value = data.期間to;
+  }
+  function 検索条件を保存する(検索対象val, ソートval, チャンネルval, キーワードval, 期間絞るbool, 期間fromVal, 期間toVal) {
+    const data = JSON.stringify({
+      検索対象: 検索対象val,
+      ソート: ソートval,
+      チャンネル: チャンネルval,
+      キーワード: キーワードval,
+      期間絞る: 期間絞るbool,
+      期間from: 期間fromVal,
+      期間to: 期間toVal
+    });
+    localStorage[localStorageQuerySaveKey] = data;
+  }
+  function 今の保存設定を取得() {
+    const data = JSON.parse(localStorage[`${localStorageKey}-data`] || "");
+    if (typeof data == "object") {
+      return data;
+    } else {
+      return {}
+    }
+  }
+  function 設定をエレメントに復元(クライアントIDs, クライアントシークレットs, リダイレクトURLs, スコープs, リフレッシュトークンs, アクセストークンs, アクセストークン期限切れs) {
+    const data = 今の保存設定を取得();
+    クライアントIDs.forEach(a => a.value = data.クライアントID || "");
+    クライアントシークレットs.forEach(a => a.value = data.クライアントシークレット || "");
+    リダイレクトURLs.forEach(a => a.value = data.リダイレクトURL || "");
+    スコープs.forEach(a => a.value = (data.スコープ || []).join("\n"));
+    リフレッシュトークンs.forEach(a => a.value = data.リフレッシュトークン || "");
+    アクセストークンs.forEach(a => a.value = data.アクセストークン || "");
+    アクセストークン期限切れs.forEach(a => {
+      if (data.アクセストークン期限切れの時刻 == null || Number.isNaN(Number(data.アクセストークン期限切れの時刻)) == false) {
+        a.value = new Date(data.アクセストークン期限切れの時刻).toLocaleString();
+      }
+    });
+  }
+  function 設定を保存(data) {//{クライアントID,クライアントシークレット,リダイレクトURL,スコープ,リフレッシュトークン,リフレッシュトークン期限切れの時刻,アクセストークン,アクセストークン期限切れの時刻}
+    const saveData = 今の保存設定を取得();
+    if (data.クライアントID !== undefined) {
+      saveData.クライアントID = data.クライアントID;
+    }
+    if (data.クライアントシークレット !== undefined) {
+      saveData.クライアントシークレット = data.クライアントシークレット;
+    }
+    if (data.リダイレクトURL !== undefined) {
+      saveData.リダイレクトURL = data.リダイレクトURL;
+    }
+    if (data.スコープ !== undefined) {
+      saveData.スコープ = data.スコープ;
+    }
+    if (data.リフレッシュトークン !== undefined) {
+      saveData.リフレッシュトークン = data.リフレッシュトークン;
+    }
+    if (data.アクセストークン !== undefined) {
+      saveData.アクセストークン = data.アクセストークン;
+    }
+    if (data.アクセストークン期限切れの時刻 !== undefined) {
+      saveData.アクセストークン期限切れの時刻 = data.アクセストークン期限切れの時刻.getTime();
+    }
+    if (data.リフレッシュトークン期限切れの時刻 !== undefined) {
+      saveData.リフレッシュトークン期限切れの時刻 = data.リフレッシュトークン期限切れの時刻.getTime();
+    }
+    localStorage[`${localStorageKey}-data`] = JSON.stringify(saveData);
+  }
+  function oauth開始(クライアントID, クライアントシークレット, リダイレクトURL, スコープs) {
+    設定を保存({
+      クライアントID,
+      クライアントシークレット,
+      リダイレクトURL,
+      スコープ: スコープs
+    });
+    // https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=<クライアントID>&redirect_uri=<リダイレクトURI>&scope=<スコープ>&access_type=offline&approval_prompt=force
+    const urlBase = `https://accounts.google.com/o/oauth2/auth`;
+    const params = [];
+    params.push(`response_type=code`);
+    params.push(`client_id=${クライアントID}`);
+    params.push(`redirect_uri=${リダイレクトURL}`);
+    params.push(`scope=${encodeURIComponent(スコープs.join(" "))}`);
+    params.push(`access_type=offline`);
+    params.push(`approval_prompt=force`);
+    const accessUrl = `${urlBase}?${params.join("&")}`;
+    document.location.href = accessUrl;
+  }
+  function アクセストークンを新規取得(コード, クライアントID, クライアントシークレット, リダイレクトURL) {
+    設定を保存({
+      クライアントID: クライアントID.value,
+      クライアントシークレット: クライアントシークレット.value,
+      リダイレクトURL: リダイレクトURL.value,
+    });
+    const postValues = [];
+    postValues.push(`code=${encodeURIComponent(コード.value)}`);
+    postValues.push(`client_id=${encodeURIComponent(クライアントID.value)}`);
+    postValues.push(`client_secret=${encodeURIComponent(クライアントシークレット.value)}`);
+    postValues.push(`redirect_uri=${encodeURIComponent(リダイレクトURL.value)}`);
+    postValues.push(`grant_type=authorization_code`);
+    postValues.push(`access_type=offline`);
+    fetch(`https://www.googleapis.com/oauth2/v4/token`, {
+      method: "post",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: postValues.join("&")
+    }).then(request => {
+      return request.json().then(json => {
+        const accessToken = json.access_token;
+        const expiresInSecond = json.expires_in;
+        const refreshToken = json.refresh_token;
+        設定を保存({
+          アクセストークン: accessToken,
+          アクセストークン期限切れの時刻: new Date(new Date().getTime() + (expiresInSecond * 1000)),
+          リフレッシュトークン: refreshToken
+        });
+        document.location.href = リダイレクトURL.value;
+      });
+    }).catch(e => {
+      alert(`コードからアクセストークンとリフレッシュトークンを取得する事に失敗しました。\n${e}`);
+    });
+  }
+  function アクセストークンを更新(リフレッシュトークン, クライアントID, クライアントシークレット) {
+    const postValues = [];
+    postValues.push(`refresh_token=${encodeURIComponent(リフレッシュトークン.value)}`);
+    postValues.push(`client_id=${encodeURIComponent(クライアントID.value)}`);
+    postValues.push(`client_secret=${encodeURIComponent(クライアントシークレット.value)}`);
+    postValues.push(`grant_type=refresh_token`);
+    postValues.push(`access_type=offline`);
+    fetch(`https://www.googleapis.com/oauth2/v4/token`, {
+      method: "post",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: postValues.join("&")
+    }).then(request => {
+      return request.json().then(json => {
+        const accessToken = json.access_token;
+        const expiresInSecond = json.expires_in;
+        // リフレッシュトークンは少なくとも6ヶ月使われなかったら必ず無効になる
+        // https://developers.google.com/identity/protocols/OAuth2#expiration
+        設定を保存({
+          アクセストークン: accessToken,
+          アクセストークン期限切れの時刻: new Date(new Date().getTime() + (expiresInSecond * 1000)),
+          リフレッシュトークン期限切れの時刻: new Date(new Date().getTime() + (6 * 30 * 24 * 60 * 60 * 1000)),
+        });
+        document.querySelector(`#update-access-token .js-oauth-access-token`).value = accessToken;
+        document.querySelector(`#update-access-token .js-oauth-access-token-expire-time`).value = new Date(new Date().getTime() + (expiresInSecond * 1000)).toLocaleString();
+      });
+    }).catch(e => {
+      alert(`コードからアクセストークンを更新する事に失敗しました。\n${e}`);
+    });
+  }
+  function 検索結果表示domクリア(検索結果表示dom) {
+    while (検索結果表示dom.firstChild) {
+      検索結果表示dom.removeChild(検索結果表示dom.firstChild)
+    }
+  }
+  function date2RFC3339(dateObject) {
+    // 1970-01-01T00:00:00Z
+    const UTCのdateObject = new Date(dateObject.getTime() + new Date().getTimezoneOffset() * 60 * 1000);
+    let r = "";
+    r += String(UTCのdateObject.getFullYear());
+    r += "-";
+    r += String(UTCのdateObject.getMonth() + 1).padStart(2, "0");
+    r += "-";
+    r += String(UTCのdateObject.getDate()).padStart(2, "0");
+    r += "T";
+    r += String(UTCのdateObject.getHours()).padStart(2, "0");
+    r += ":";
+    r += String(UTCのdateObject.getMinutes()).padStart(2, "0");
+    r += ":";
+    r += String(UTCのdateObject.getSeconds()).padStart(2, "0");
+    r += "Z";
+    return r;
+  }
+  function 動画情報のdomを作成(vid, サムネURL, 動画長さ秒, index番号, タイトル, 投稿日時DateObj, チャンネル名, チャンネルID, 説明テキスト, タグ一覧, view数, 好き数, 嫌い数, コメ数, ブクマ数, live情報) {
+    const dom = document.createElement("div");
+    dom.style.display = "flex";
+    dom.style.padding = "7px 0px";
+    dom.style.borderBottom = "solid 1px silver";
+    dom.style.width = "100%";
+    dom.innerHTML = `
+<a style="flex:0 0 100px;position: relative;" href="" class="js-link">
+  <div style="width: 100%;height: 169px;overflow: hidden;position: relative;">
+    <img src="" style="object-fit: contain;width: 225px;height: 169px;" class="js-img">
+    <span style="background: #000000a6;color: white;position: absolute;bottom: 0;right: 0;padding: 2px;font-size:10px;" class="js-duration"></span>
+    <span style="background: #000000a6;color: white;position: absolute;bottom: 0;left: 0;padding: 2px;font-size:10px;" class="js-postdate"></span>
+  </div>
+</a>
+<div style="display:flex;flex-direction:column;margin-left: 10px;overflow: hidden;">
+<div style="flex:0 0 auto;font-size: 30px;"><span class="js-number"></span><span class="js-title"></span></div>
+<div style="flex:0 0 auto;">
+  <a href=""  class="js-user">ユーザ名</a>
+  <button style="font-size: 9px;vertical-align: middle;" class="js-user-id-set-query">ユーザIDで絞り込み</button>
+  <button style="font-size: 9px;vertical-align: middle;" class="js-user-id-ng">ユーザIDをNG追加</button>
+  <button style="font-size: 9px;vertical-align: middle;" class="js-n-day-set-query">+- N日の日付を指定</button>
+</div>
+<div style="flex:0 0 auto;height: 100px;overflow-y: scroll;background-color: #dadada;font-size:11px;" class="js-description">説明文ほげほげ<br>かげかげ</div>
+<div style="flex: 0 0 auto;text-overflow: ellipsis;white-space: nowrap;width: 100%;overflow: hidden;font-size: 10px;" class="js-tags">任天堂/スイッチ/あれ/これ</div>
+<div style="flex:0 0 auto;" class="js-statics">視聴数:<span class="js-watch-count"></span> Like:<span class="js-like-count"></span> UnLile:<span class="js-unlike-count"></span> コメント:<span class="js-comment-count"></span></div>
+</div>
+`;
+    dom.querySelector(".js-link").href = `https://www.youtube.com/watch?v=${vid}`;
+    dom.querySelector(".js-img").setAttribute("src", サムネURL);
+    // 動画長さ。liveの場合があるのでチェク
+    if (live情報 && live情報.scheduledStartTime && live情報.actualStartTime == null) {
+      // 配信前のカウントダウン中
+      const 配信開始時刻 = new Date(live情報.scheduledStartTime);
+      const 配信までの秒 = Math.floor((配信開始時刻.getTime() - new Date().getTime()) / 1000);
+      if (配信までの秒 < 0) {
+        const 配信が始まってるはずからの秒 = 配信までの秒 * -1;
+        if (配信が始まってるはずからの秒 < 60) {
+          dom.querySelector(".js-duration").innerText = `LIVE中？ 0:${String(配信が始まってるはずからの秒).padEnd(2, "0")}`;
+        } else if (配信が始まってるはずからの秒 < 3600) {
+          dom.querySelector(".js-duration").innerText = `LIVE中？ ${Math.floor(配信が始まってるはずからの秒 / 60)}:${String(配信が始まってるはずからの秒 % 60).padEnd(2, "0")}`;
+        } else {
+          dom.querySelector(".js-duration").innerText = `LIVE中？ ${Math.floor(配信が始まってるはずからの秒 / 3600)}:${String(Math.floor(配信が始まってるはずからの秒 / 60) % 60).padEnd(2, "0")}:${String(配信が始まってるはずからの秒 % 60).padEnd(2, "0")}`;
+        }
+      } else if (配信までの秒 < 60) {
+        dom.querySelector(".js-duration").innerText = `LIVEまで 0:${String(配信までの秒).padEnd(2, "0")}`;
+      } else if (配信までの秒 < 3600) {
+        dom.querySelector(".js-duration").innerText = `LIVEまで ${Math.floor(配信までの秒 / 60)}:${String(配信までの秒 % 60).padEnd(2, "0")}`;
+      } else {
+        dom.querySelector(".js-duration").innerText = `LIVEまで ${Math.floor(配信までの秒 / 3600)}:${String(Math.floor(配信までの秒 / 60) % 60).padEnd(2, "0")}:${String(配信までの秒 % 60).padEnd(2, "0")}`;
+      }
+    } else if (live情報 && live情報.actualEndTime == null) {
+      // 配信中
+      const 配信開始時刻 = new Date(live情報.actualStartTime);
+      const 動画長さ秒_live = Math.floor((new Date().getTime() - 配信開始時刻.getTime()) / 1000);
+      if (動画長さ秒_live < 60) {
+        dom.querySelector(".js-duration").innerText = `LIVE中 0:${String(動画長さ秒_live).padEnd(2, "0")}`;
+      } else if (動画長さ秒_live < 3600) {
+        dom.querySelector(".js-duration").innerText = `LIVE中 ${Math.floor(動画長さ秒_live / 60)}:${String(動画長さ秒_live % 60).padEnd(2, "0")}`;
+      } else {
+        dom.querySelector(".js-duration").innerText = `LIVE中 ${Math.floor(動画長さ秒_live / 3600)}:${String(Math.floor(動画長さ秒_live / 60) % 60).padEnd(2, "0")}:${String(動画長さ秒_live % 60).padEnd(2, "0")}`;
+      }
+    } else {
+      if (動画長さ秒 < 60) {
+        dom.querySelector(".js-duration").innerText = `0:${String(動画長さ秒).padEnd(2, "0")}`;
+      } else if (動画長さ秒 < 3600) {
+        dom.querySelector(".js-duration").innerText = `${Math.floor(動画長さ秒 / 60)}:${String(動画長さ秒 % 60).padEnd(2, "0")}`;
+      } else {
+        dom.querySelector(".js-duration").innerText = `${Math.floor(動画長さ秒 / 3600)}:${String(Math.floor(動画長さ秒 / 60) % 60).padEnd(2, "0")}:${String(動画長さ秒 % 60).padEnd(2, "0")}`;
+      }
+    }
+    dom.querySelector(".js-number").innerText = String(index番号) + ":";
+    if (localStorage[`${localStorageVideoFavoriteKey}-${vid}`]) {
+      dom.style.backgroundColor = localStorage[`${localStorageVideoFavoriteKey}-${vid}`];
+    }
+    dom.querySelector(".js-number").addEventListener("click", () => {
+      const 今の値 = localStorage[`${localStorageVideoFavoriteKey}-${vid}`];
+      const 次の値 = お気に入りで使える色一覧[(お気に入りで使える色一覧.indexOf(今の値) + 1) % お気に入りで使える色一覧.length];
+      localStorage[`${localStorageVideoFavoriteKey}-${vid}`] = 次の値;
+      dom.style.backgroundColor = 次の値;
+    });
+    dom.querySelector(".js-title").innerText = タイトル;
+    {
+      if (live情報 && live情報.actualStartTime) {
+        let timeStamp動画投稿 = "";
+        let timeStamp配信開始 = "";
+        {
+          let d = 投稿日時DateObj;
+          let r = "";
+          r += String(d.getFullYear());
+          r += "/";
+          r += String(d.getMonth() + 1).padStart(2, "0");
+          r += "/";
+          r += String(d.getDate()).padStart(2, "0");
+          r += "(";
+          r += ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+          r += ")";
+          r += String(d.getHours()).padStart(2, "0");
+          r += ":";
+          r += String(d.getMinutes()).padStart(2, "0");
+          r += ":";
+          r += String(d.getSeconds()).padStart(2, "0");
+          timeStamp動画投稿 = r;
+        }
+        {
+          let d = new Date(live情報.actualStartTime);
+          let r = "";
+          r += String(d.getFullYear());
+          r += "/";
+          r += String(d.getMonth() + 1).padStart(2, "0");
+          r += "/";
+          r += String(d.getDate()).padStart(2, "0");
+          r += "(";
+          r += ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+          r += ")";
+          r += String(d.getHours()).padStart(2, "0");
+          r += ":";
+          r += String(d.getMinutes()).padStart(2, "0");
+          r += ":";
+          r += String(d.getSeconds()).padStart(2, "0");
+          timeStamp配信開始 = r;
+        }
+        dom.querySelector(".js-postdate").innerHTML = `<div style="color:silver;">${timeStamp動画投稿}←投稿日時</div><div>${timeStamp配信開始}←配信開始</div>`;
+      } else {
+        let timeStamp = "";
+        {
+          let d = 投稿日時DateObj;
+          let r = "";
+          r += String(d.getFullYear());
+          r += "/";
+          r += String(d.getMonth() + 1).padStart(2, "0");
+          r += "/";
+          r += String(d.getDate()).padStart(2, "0");
+          r += "(";
+          r += ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+          r += ")";
+          r += String(d.getHours()).padStart(2, "0");
+          r += ":";
+          r += String(d.getMinutes()).padStart(2, "0");
+          r += ":";
+          r += String(d.getSeconds()).padStart(2, "0");
+          timeStamp = r;
+        }
+        dom.querySelector(".js-postdate").innerText = timeStamp;
+      }
+    }
+    dom.querySelector(".js-user").innerText = チャンネル名;
+    dom.querySelector(".js-user").setAttribute("href", `https://www.youtube.com/channel/${チャンネルID}`);
+    dom.querySelector(".js-user-id-set-query").addEventListener("click", () => {
+      document.querySelector(".js-channel-id").value = チャンネルID;
+    });
+    dom.querySelector(".js-user-id-ng").addEventListener("click", () => {
+      if (confirm(`ユーザ 「${チャンネル名}」をNGしてよろしいですか？\n ※現状解除UIなし`) == false) {
+        return;
+      }
+      チャンネルをNG追加(チャンネルID);
+    });
+    dom.querySelector(".js-n-day-set-query").addEventListener("click", () => {
+      const nDays = prompt("前後N日を検索条件として指定", "4");
+      if (nDays === undefined) {
+        return;
+      }
+      const 検索期間_有効 = document.querySelector(".js-date-enable");
+      const 検索期間_from = document.querySelector(".js-date-from");
+      const 検索期間_to = document.querySelector(".js-date-to");
+      検索期間_有効.checked = true;
+      検索期間_from.value = new Date(投稿日時DateObj.getTime() - nDays * 24 * 60 * 60 * 1000).toLocaleString();
+      検索期間_to.value = new Date(投稿日時DateObj.getTime() + nDays * 24 * 60 * 60 * 1000).toLocaleString();;
+    });
+
+    dom.querySelector(".js-description").innerText = 説明テキスト;
+    dom.querySelector(".js-tags").innerText = タグ一覧.join(" / ");
+    dom.querySelector(".js-tags").title = タグ一覧.join(" / ");
+    dom.querySelector(".js-watch-count").innerText = 数を日本語桁入れる(view数);
+    dom.querySelector(".js-like-count").innerText = 数を日本語桁入れる(好き数);
+    dom.querySelector(".js-unlike-count").innerText = 数を日本語桁入れる(嫌い数);
+    dom.querySelector(".js-comment-count").innerText = コメ数 === undefined ? "禁止" : 数を日本語桁入れる(コメ数);
+    dom.dataset.channelId = チャンネルID;
+    return dom;
+  }
+  async function on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, 次ページトークン) {
+    // トークンが使えるかチェック
+    const setting = 今の保存設定を取得();
+    if (!setting.アクセストークン && setting.アクセストークン期限切れの時刻 < new Date().getTime()) {
+      alert("有効なアクセストークンがありません。");
+      return;
+    }
+    // urlを組み立てる
+    const getVidParams = ["part=id", "maxResults=50", "type=video", `q=${encodeURIComponent(検索キーワード)}`];
+    getVidParams.push(`order=${ソート方式}`);
+    if (検索対象 == "live-active") {
+      getVidParams.push(`eventType=live`);
+    } else if (検索対象 == "live-end") {
+      getVidParams.push(`eventType=completed`);
+    } else if (検索対象 == "live-ready") {
+      getVidParams.push(`eventType=upcoming`);
+    }
+    if (チャンネルid != "") {
+      getVidParams.push(`channelId=${チャンネルid}`);
+    }
+    if (from日時文字列 != "" && to日時文字列 != "") {
+      if (Number.isNaN(new Date(from日時文字列).getDate())) {
+        return Promise.reject(new Error(`from日時文字列を日付にパース出来ませんでした。`));
+      }
+      if (Number.isNaN(new Date(to日時文字列).getDate())) {
+        return Promise.reject(new Error(`from日時文字列を日付にパース出来ませんでした。`));
+      }
+      if (new Date(to日時文字列).getTime() < new Date(from日時文字列).getTime()) {
+        return Promise.reject(new Error(`日時の前後関係が異常です。`));
+      }
+      getVidParams.push(`publishedAfter=${date2RFC3339(new Date(from日時文字列))}`);
+      getVidParams.push(`publishedBefore=${date2RFC3339(new Date(to日時文字列))}`);
+    }
+    if (次ページトークン) {
+      getVidParams.push(`pageToken=${次ページトークン}`);
+    }
+    検索条件を保存する(検索対象, ソート方式, チャンネルid, 検索キーワード, from日時文字列 != "" && to日時文字列 != "", from日時文字列, to日時文字列);
+    return apiを投げる(`https://www.googleapis.com/youtube/v3/search?${getVidParams.join("&")}`, setting.アクセストークン).then(r => {
+      if (r.error) {
+        return Promise.reject(new Error("動画ID一覧の取得に失敗しました。\n" + JSON.stringify(r, null, "  ")));
+      }
+      const nextPageToken = r.nextPageToken;
+      const 検索結果の件数 = r.pageInfo.totalResults;
+      const vids = r.items.map(a => a.id.videoId);
+      if (vids.length == 0) {
+        return Promise.resolve(null);//結果なし
+      }
+      const getVideoDetailsParams = ["part=id,snippet,statistics,contentDetails,liveStreamingDetails", `id=${vids.join(",")}`, "maxResults=50"].join("&");
+      return apiを投げる(`https://www.googleapis.com/youtube/v3/videos?${getVideoDetailsParams}`, setting.アクセストークン).then(r => {
+        if (r.error) {
+          return Promise.reject(new Error("動画ID一覧の取得に失敗しました。\n" + JSON.stringify(r, null, "  ")));
+        }
+        const items = r.items.map(a => {
+          let durationSec = 0;
+          if (a.contentDetails.duration.match(/(\d+)S/)) {
+            durationSec += Number(RegExp.$1);
+          }
+          if (a.contentDetails.duration.match(/(\d+)M/)) {
+            durationSec += Number(RegExp.$1) * 60;
+          }
+          if (a.contentDetails.duration.match(/(\d+)H/)) {
+            durationSec += Number(RegExp.$1) * 3600;
+          }
+          return {
+            videoId: a.id,
+            channelId: a.snippet.channelId,
+            channelTitle: a.snippet.channelTitle,
+            description: a.snippet.description,
+            title: a.snippet.title,
+            publishedAt: new Date(a.snippet.publishedAt),
+            thumbnail: a.snippet.thumbnails.high.url,
+            tags: a.snippet.tags ? a.snippet.tags : [],
+            statistics: a.statistics,
+            durationSec: durationSec,
+            liveStreamingDetails: a.liveStreamingDetails,
+            raw: a
+          }
+        });
+        return {
+          items: items,
+          nextPageToken,
+          検索結果の件数
+        }
+      })
+    });
+  }
+  async function apiを投げる(getUrl, アクセストークン) {
+    return fetch(getUrl, {
+      headers: { "Authorization": `Bearer ${アクセストークン}` },
+    }).then(request => {
+      return request.json()
+    });
+  }
+  function 検索UIのセットアップ(dom) {
+    const チャンネルinput = dom.querySelector(".js-channel-id");
+    const キーワードinput = dom.querySelector(".js-keyword");
+    const 検索期間_有効 = dom.querySelector(".js-date-enable");
+    const 検索期間_from = dom.querySelector(".js-date-from");
+    const 検索期間_to = dom.querySelector(".js-date-to");
+    const 検索結果表示dom = dom.querySelector(".js-result");
+    const 検索結果ステータスdom = dom.querySelector(".js-search-result");
+    const 検索_新規_ボタン = dom.querySelector(".js-clear-search");
+    const 検索_追記_ボタン = dom.querySelector(".js-add-search");
+    キーワードinput.value = "スマブラ";
+    チャンネルinput.value = "";
+    検索_追記_ボタン.disabled = true; 検索_追記_ボタン.style.color = "silver";
+    dom.querySelectorAll(".js-date-autoinput-buttons button").forEach(button => {
+      if (button.dataset.type == "n-days") {
+        button.addEventListener("click", () => {
+          const nDay = prompt("最近何日にしますか？", "1");
+          if (nDay === undefined || Number.isNaN(Number(nDay))) {
+            return;
+          }
+          const now = new Date().toLocaleString();
+          const from = new Date(new Date().getTime() - Number(nDay) * 24 * 60 * 60 * 1000).toLocaleString();
+          検索期間_有効.checked = true;
+          検索期間_from.value = from;
+          検索期間_to.value = now;
+        });
+
+      } else {
+        const f = button.dataset.from;
+        const t = button.dataset.to;
+        button.addEventListener("click", () => {
+          検索期間_有効.checked = true;
+          検索期間_from.value = f;
+          検索期間_to.value = t;
+        });
+      }
+    })
+    dom.querySelector(".js-clear-search").addEventListener("click", () => {
+      const 検索対象 = dom.querySelector("[name=search-target]:checked").value;
+      const ソート方式 = dom.querySelector("[name=search-order]:checked").value;
+      const 検索キーワード = キーワードinput.value;
+      const チャンネルid = チャンネルinput.value;
+      const from日時文字列 = 検索期間_有効.checked ? 検索期間_from.value : "";
+      const to日時文字列 = 検索期間_有効.checked ? 検索期間_to.value : "";
+      検索ボタン有効管理クラス.apiコール開始();
+      on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, "").then(result => {
+        検索ボタン有効管理クラス.apiコール終了();
+        console.log(result);
+        if (result == null) {
+          検索ボタン有効管理クラス.新規検索のみにする();
+          alert("検索結果なし");
+          return;
+        }
+        検索結果表示domクリア(検索結果表示dom);
+        if (result.items.length < result.検索結果の件数) {
+          // 次へ がある。
+          次ページの検索条件 = { pageToken: result.nextPageToken, numberFrom: result.items.length };
+          検索ボタン有効管理クラス.追加検索を有効にする();
+          検索結果ステータスdom.innerText = `全 ${result.検索結果の件数}件 / ${result.items.length} 件受信。次ページあり`;
+        } else {
+          // 次へ が無い
+          検索ボタン有効管理クラス.新規検索のみにする();
+          検索結果ステータスdom.innerText = `全 ${result.検索結果の件数}件 / ${result.items.length} 件受信。ページ終了`;
+        }
+        let index = 0;
+        for (let item of result.items) {
+          index += 1;
+          if (localStorage[`${localStorageNgChannelKey}-${item.channelId}`]) {
+            continue;
+          }
+          const dom = 動画情報のdomを作成(
+            item.videoId,
+            item.thumbnail,
+            item.durationSec,
+            index,
+            item.title,
+            item.publishedAt,
+            item.channelTitle,
+            item.channelId,
+            item.description,
+            item.tags,
+            item.statistics.viewCount,
+            item.statistics.likeCount,
+            item.statistics.dislikeCount,
+            item.statistics.commentCount,
+            item.statistics.favoriteCount,
+            item.liveStreamingDetails
+          );
+          検索結果表示dom.appendChild(dom);
+        }
+      }).catch(e => {
+        console.log(e);
+        alert(`検索エラー\n${e.message}`);
+      });
+    });
+    dom.querySelector(".js-add-search").addEventListener("click", () => {
+      const 検索対象 = dom.querySelector("[name=search-target]:checked").value;
+      const ソート方式 = dom.querySelector("[name=search-order]:checked").value;
+      const 検索キーワード = キーワードinput.value;
+      const チャンネルid = チャンネルinput.value;
+      const from日時文字列 = 検索期間_有効.checked ? 検索期間_from.value : "";
+      const to日時文字列 = 検索期間_有効.checked ? 検索期間_to.value : "";
+      if (次ページの検索条件 == null) {
+        alert(`押せない時に追加検索が押されました。`);
+        return;
+      }
+      検索ボタン有効管理クラス.apiコール開始();
+      on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, 次ページの検索条件.pageToken).then(result => {
+        検索ボタン有効管理クラス.apiコール終了();
+        console.log(result);
+        if (result == null) {
+          検索ボタン有効管理クラス.新規検索のみにする();
+          alert("検索結果なし");
+          return;
+        }
+        検索結果ステータスdom.innerText = `全 ${result.検索結果の件数}件`;
+        let addIndex = 次ページの検索条件.numberFrom;
+        if (次ページの検索条件.numberFrom + result.items.length < result.検索結果の件数) {
+          // 次へ がある。
+          次ページの検索条件.pageToken = result.nextPageToken;
+          次ページの検索条件.numberFrom = 次ページの検索条件.numberFrom + result.items.length;
+          検索結果ステータスdom.innerText = `全 ${result.検索結果の件数}件 / ${次ページの検索条件.numberFrom} 件受信。次ページあり`;
+          検索ボタン有効管理クラス.追加検索を有効にする();
+        } else {
+          // 次へ がない
+          検索結果ステータスdom.innerText = `全 ${result.検索結果の件数}件 / ${次ページの検索条件.numberFrom} 件受信。ページ終了`;
+          次ページの検索条件 = null;
+          検索ボタン有効管理クラス.新規検索のみにする();
+        }
+        for (let item of result.items) {
+          addIndex += 1;
+          if (localStorage[`${localStorageNgChannelKey}-${item.channelId}`]) {
+            continue;
+          }
+          const dom = 動画情報のdomを作成(
+            item.videoId,
+            item.thumbnail,
+            item.durationSec,
+            addIndex,
+            item.title,
+            item.publishedAt,
+            item.channelTitle,
+            item.channelId,//これリンクにする？
+            item.description,
+            item.tags,
+            item.statistics.viewCount,
+            item.statistics.likeCount,
+            item.statistics.dislikeCount,
+            item.statistics.commentCount,
+            item.statistics.favoriteCount,
+            item.liveStreamingDetails
+          );
+          検索結果表示dom.appendChild(dom);
+        }
+      }).catch(e => {
+        console.log(e);
+        alert(`検索エラー\n${e.message}`);
+      });
+    });
+    検索条件を復元する(
+      [...dom.querySelectorAll("input[name=search-target]")],
+      [...dom.querySelectorAll("input[name=search-order]")],
+      チャンネルinput,
+      キーワードinput,
+      検索期間_有効,
+      検索期間_from,
+      検索期間_to
+    );
+  }
+  function チャンネルをNG追加(チャンネルID) {
+    const 削除するdom一覧 = [];
+    for (let i of document.querySelector(".js-result").children) {
+      if (i.dataset.channelId == チャンネルID) {
+        削除するdom一覧.push(i);
+      }
+    }
+    for (let i of 削除するdom一覧) {
+      i.parentNode.removeChild(i);
+    }
+    localStorage[`${localStorageNgChannelKey}-${チャンネルID}`] = true;
+  }
+  function 数を日本語桁入れる(num) {
+    const str = String(num);
+    if (10000 <= num) {
+      // 1000万1234
+      str.match(/(\d+)(\d{4})/);
+      return `${RegExp.$1}万${RegExp.$2}`;
+    } else {
+      return str;
+    }
+  }
+  class 検索ボタン有効管理 {
+    constructor(クリアして検索ボタン, 追記して検索ボタン) {
+      this.クリアして検索ボタン = クリアして検索ボタン;
+      this.追記して検索ボタン = 追記して検索ボタン;
+      this.apiコール中 = false;
+      this.追加検索有効 = false;
+    }
+    apiコール開始() {
+      this.apiコール中 = true;
+      this._ボタン状態更新();
+    }
+    apiコール終了() {
+      this.apiコール中 = false;
+      this._ボタン状態更新();
+    }
+    新規検索のみにする() {
+      this.追加検索有効 = false;
+      this._ボタン状態更新();
+    }
+    追加検索を有効にする() {
+      this.追加検索有効 = true;
+      this._ボタン状態更新();
+    }
+    _ボタン状態更新() {
+      let クリアして検索ボタン有効 = true;
+      let 追記して検索ボタン有効 = true;
+      if (this.apiコール中) {
+        クリアして検索ボタン有効 = false;
+        追記して検索ボタン有効 = false;
+      } else if (this.追加検索有効) {
+        クリアして検索ボタン有効 = true;
+        追記して検索ボタン有効 = true;
+      } else {
+        クリアして検索ボタン有効 = true;
+        追記して検索ボタン有効 = false;
+      }
+      if (クリアして検索ボタン有効) {
+        this.クリアして検索ボタン.disabled = false;
+        this.クリアして検索ボタン.style.opacity = "1";
+        this.クリアして検索ボタン.style.color = "";
+      } else {
+        this.クリアして検索ボタン.disabled = true;
+        //this.クリアして検索ボタン.style.opacity = ".5";
+        this.クリアして検索ボタン.style.color = "silver";
+      }
+      if (追記して検索ボタン有効) {
+        this.追記して検索ボタン.disabled = false;
+        this.追記して検索ボタン.style.opacity = "1";
+        this.追記して検索ボタン.style.color = "";
+      } else {
+        this.追記して検索ボタン.disabled = true;
+        //this.追記して検索ボタン.style.opacity = ".5";
+        this.追記して検索ボタン.style.color = "silver";
+      }
+    }
+  }
+</script>
+<div id="overlay-white" style="background: #0000007a;position: absolute;top: 0;bottom: 0;left: 0;right: 0;z-index: 1;"></div>
+<div id="google-oauth-overlay" style="display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;">
+  <div id="get-code" class="js-get-code" style="width:500px;padding:10px;border:solid 1px silver;background-color: white;">
+    <h4>STEP 1/3</h4>
+    <h5>クライアントID</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-id">
+    <h5>クライアントシークレット</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-secret">
+    <h5>リダイレクトURL</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-redirect-url" title="GoogleApiコンソールの認証情報＞OAuth2.0クライアント＞承認済みのリダイレクト URI に値を入れる。ファイル名含む完全一致で判定される。OAuth同意画面 ではない。">
+    <h5>スコープ</h5>
+    <textarea style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-scope" title="ドキュメントに書かれているURLと完全一致の必要あり。最後にスラッシュを付けたり消したりしてもNG"></textarea>
+    <button class="js-start-oauth">oAuth認証開始</button>
+    <div>
+      <ul>
+        <li><a href="https://developers.google.com/identity/protocols/googlescopes">スコープの一覧</a></li>
+      </ul>
+    </div>
+  </div>
+  <div id="get-access-token" style="width:500px;padding:10px;border:solid 1px silver;background-color: white;">
+    <h4>STEP 2/3</h4>
+    <h5>コード</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-google-callback-code">
+    <h5>クライアントID</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-id">
+    <h5>クライアントシークレット</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-secret">
+    <h5>リダイレクトURL</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-redirect-url">
+    <button class="js-get-access-token">トークン取得</button>
+  </div>
+  <div id="update-access-token" style="width:500px;padding:10px;border:solid 1px silver;background-color: white;">
+    <h4>STEP 3/3</h4>
+    <h5>今のアクセストークン</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-access-token">
+    <h5>今のアクセストークンの期限切れの時刻</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-access-token-expire-time">
+    <h5>クライアントID</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-id">
+    <h5>クライアントシークレット</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-secret">
+    <h5>リフレッシュトークン</h5>
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-refresh-token">
+    <button class="js-update-access-token-close">検索をはじめる</button>
+    <button class="js-update-access-token">トークン更新</button>
+    <button class="js-update-access-token-reset">トークン取得し直し</button>
+    <div class="js-error-message" style="color:red;font-weight: bold;"></div>
+  </div>
+</div>
+<div id="about-overlay" style="visibility:hidden;display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;background-color: #00000075;">
+  <div style="width:700px;padding:10px;border:solid 1px silver;background-color: white;">
+    <h4>Youtubeをapiで検索するツール</h4>
+    <ul style="padding-left: 20px;">
+      <li>YoutubeDataAPIを使って検索。</li>
+      <li>公式では出来ない、任意の日付指定の絞り込み、ユーザNGが可能。</li>
+      <li>ユーザNGはlocalStorageに記録されているので手動で削除して。</li>
+      <li>https://console.developers.google.com/apis/credentials/consent?project=youtube-search-api-225003</li>
+      <li>参考 https://himakan.net/tool/get_google_oauth_api_token</li>
+    </ul>
+    <div style="display: flex;justify-content: center;"><button id="about-close">aboutを閉じる</button></div>
+  </div>
+</div>
+<div id="import-export-overlay" style="visibility:hidden;display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;background-color: #00000075;">
+  <div style="min-width:700px;padding:10px;border:solid 1px silver;background-color: white;">
+    <h4>インポート/エクスポート</h4>
+    <textarea id="import-export-value" style="width: 100%;height: 10em;" wrap="off"></textarea>
+    <div style="display: flex;justify-content: center;">
+      <button id="import-export-overlay-close">閉じる</button>
+      <button id="import-go">インポートする</button>
+    </div>
+  </div>
+</div>
+<div id="search-ui" style="box-sizing: border-box;padding: 10px;display: flex;flex-direction: column;    height: 100vh;">
+  <!-- 検索フォーム -->
+  <header style="flex:0 0 auto;background-color:white;display:flex;border-bottom:2px solid silver;padding:10px;">
+    <div style="flex:1 1 0;display:flex;flex-direction:column;">
+      <div>検索対象</div>
+      <div style="margin-left:10px;">
+        <ul>
+          <li><label><input type="radio" name="search-target" value="movie" checked>動画</label></li>
+          <li><label><input type="radio" name="search-target" value="live-active">ライブ 配信中</label></li>
+          <li><label><input type="radio" name="search-target" value="live-end">ライブ 終了</label></li>
+          <li><label><input type="radio" name="search-target" value="live-ready">ライブ 予定</label></li>
+        </ul>
+      </div>
+    </div>
+    <div style="flex:1 1 0;display:flex;flex-direction:column;">
+      <div>検索並び替え</div>
+      <div style="margin-left:10px;">
+        <ul>
+          <li><label><input type="radio" name="search-order" value="date" checked>日付</label></li>
+          <li><label><input type="radio" name="search-order" value="rating">評価</label></li>
+          <li><label><input type="radio" name="search-order" value="relevance">関連性</label></li>
+          <li><label><input type="radio" name="search-order" value="viewCount">再生回数</label></li>
+        </ul>
+      </div>
+    </div>
+    <div style="flex:3 3 0;">
+      <div>検索対象チャンネル</div>
+      <div style="margin-left:10px;">
+        <input type="search" style="width:100%;" class="js-channel-id">
+      </div>
+      <div>検索対象キーワード</div>
+      <div style="margin-left:10px;">
+        <input type="search" style="width:100%;" class="js-keyword">
+      </div>
+    </div>
+    <div style="flex:0 0 10px;">
+    </div>
+    <div style="flex:3 3 0;">
+      <div>検索期間</div>
+      <div style="display:flex;align-items: center;">
+        <label><input type="checkbox" class="js-date-enable">期間絞る</label>
+        <input type="text" value="2018/01/01 00:00" class="js-date-from">
+        ～
+        <input type="text" value="2018/01/01 00:00" class="js-date-to">
+      </div>
+      <div class="js-date-autoinput-buttons" style="margin-left: 10px;">
+        <button data-type="n-days">最近x日</button>
+        <button data-from="2018/12/06 23:00" data-to="2018/12/07 00:00">スマブラSP発売の瞬間</button>
+      </div>
+      <div>検索結果</div>
+      <div style="margin-left:10px;" class="js-search-result"></div>
+    </div>
+    <div style="flex:0 0 100px;display:flex;flex-direction:column;justify-content: flex-end;">
+      <button style="flex:0 0 auto;" class="js-open-import-export">import/export</button>
+      <button style="flex:0 0 auto;" class="js-about">about</button>
+      <button style="flex:0 0 auto;" class="js-token-config">トークンの設定</button>
+    </div>
+    <div style="flex:0 0 150px;display:flex;flex-direction:column;">
+      <button style="flex:2 2 0;" class="js-clear-search">クリアして<br>検索</button>
+      <button style="flex:2 2 0;" class="js-add-search">追記して<br>検索</button>
+    </div>
+  </header>
+  <main style="flex:1 1 0;background-color:white;overflow-y: scroll;" class="js-result"> </main>
+</div>
