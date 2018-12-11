@@ -139,11 +139,6 @@
         アクセストークン更新view.style.display = "none";
       }
     }
-    // 1076327949528-kne27hj7gu92j39i nlv2jcho4jd5qi75.apps.googleusercontent.com
-    // http://localhost:8080/
-    // https://www.googleapis.com/auth/youtube
-    // Z8ZGl76V17uNwVyQJddvwhTC
-    // 画面表示を切り替え
   }, false);
   function エクスポートの値を作る() {
     const result = [];
@@ -481,7 +476,8 @@
     }
     dom.querySelector(".js-number").addEventListener("click", () => {
       const 今の値 = localStorage[`${localStorageVideoFavoriteKey}-${vid}`];
-      const 次の値 = お気に入りで使える色一覧[(お気に入りで使える色一覧.indexOf(今の値) + 1) % お気に入りで使える色一覧.length];
+      const 今のindex = お気に入りで使える色一覧.indexOf(今の値);
+      const 次の値 = 今のindex == お気に入りで使える色一覧.length - 1 ? "" : お気に入りで使える色一覧[(今のindex + 1) % お気に入りで使える色一覧.length];
       localStorage[`${localStorageVideoFavoriteKey}-${vid}`] = 次の値;
       dom.style.backgroundColor = 次の値;
     });
