@@ -463,7 +463,7 @@
       const 配信開始時刻 = new Date(live情報.actualStartTime);
       const 動画長さ秒_live = Math.floor((new Date().getTime() - 配信開始時刻.getTime()) / 1000);
       liveマーク.self.style.display = "";
-      liveマーク.body.innerText = `${live情報.concurrentViewers} viewers`;
+      liveマーク.body.innerText = `${live情報.concurrentViewers} View`;
       if (動画長さ秒_live < 60) {
         dom.querySelector(".js-duration").innerText = `LIVE中 0:${String(動画長さ秒_live).padEnd(2, "0")}`;
         liveマーク.self.style.display = "";
