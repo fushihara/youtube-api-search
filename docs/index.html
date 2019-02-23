@@ -2,10 +2,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
 <style>
-  *{word-break: break-all;box-sizing: border-box;margin:0;padding:0;}
- .get-code{
-   width:500px;
- }
+  * {
+    word-break: break-all;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  .get-code {
+    width: 500px;
+  }
 </style>
 <script>
   NodeList.prototype.forEach = Array.prototype.forEach;
@@ -215,7 +221,7 @@
       アクセストークンを自動更新する(トークン更新ボタン, エラーメッセージdom);
     }, 10 * 1000);
   }
-  function 検索条件を復元する(検索対象inputs, ソートinputs, チャンネルinput, キーワードinput, 期間絞るcheck, 期間fromInput, 期間toInput) {
+  function 検索条件を復元する(検索対象inputs, ソートinputs, チャンネルinput, キーワードinput, 期間絞るcheck, 期間fromInput, 期間toInput, 地域select, セーフサーチselect, 画質select, 長さselect) {
     const data = JSON.parse(localStorage[localStorageQuerySaveKey] || "{}");
     if (typeof data != "object") { return; }
     // この値は全部あるかないかのはずなので、適当に数個だけ
@@ -233,8 +239,12 @@
     期間絞るcheck.checked = data.期間絞る;
     期間fromInput.value = data.期間from;
     期間toInput.value = data.期間to;
+    地域select.value = data.地域;
+    セーフサーチselect.value = data.セーフサーチ;
+    画質select.value = data.画質;
+    長さselect.value = data.長さ;
   }
-  function 検索条件を保存する(検索対象val, ソートval, チャンネルval, キーワードval, 期間絞るbool, 期間fromVal, 期間toVal) {
+  function 検索条件を保存する(検索対象val, ソートval, チャンネルval, キーワードval, 期間絞るbool, 期間fromVal, 期間toVal, 地域, セーフサーチ, 画質, 長さ) {
     const data = JSON.stringify({
       検索対象: 検索対象val,
       ソート: ソートval,
@@ -242,7 +252,8 @@
       キーワード: キーワードval,
       期間絞る: 期間絞るbool,
       期間from: 期間fromVal,
-      期間to: 期間toVal
+      期間to: 期間toVal,
+      地域, セーフサーチ, 画質, 長さ
     });
     localStorage[localStorageQuerySaveKey] = data;
   }
@@ -591,7 +602,7 @@
     dom.dataset.channelId = チャンネルID;
     return dom;
   }
-  async function on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, 次ページトークン) {
+  async function on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, 地域, セーフサーチ, 画質, 長さ, 次ページトークン) {
     // トークンが使えるかチェック
     const setting = 今の保存設定を取得();
     if (!setting.アクセストークン && setting.アクセストークン期限切れの時刻 < new Date().getTime()) {
@@ -610,6 +621,18 @@
     }
     if (チャンネルid != "") {
       getVidParams.push(`channelId=${チャンネルid}`);
+    }
+    if (地域 != "") {
+      getVidParams.push(`regionCode=${地域}`);
+    }
+    if (セーフサーチ != "") {
+      getVidParams.push(`safeSearch=${セーフサーチ}`);
+    }
+    if (画質 != "") {
+      getVidParams.push(`videoDefinition=${画質}`);
+    }
+    if (長さ != "") {
+      getVidParams.push(`videoDuration=${長さ}`);
     }
     if (from日時文字列 != "" && to日時文字列 != "") {
       if (Number.isNaN(new Date(from日時文字列).getDate())) {
@@ -687,6 +710,10 @@
   function 検索UIのセットアップ(dom) {
     const チャンネルinput = dom.querySelector(".js-channel-id");
     const キーワードinput = dom.querySelector(".js-keyword");
+    const 地域select = dom.querySelector(".js-region");
+    const セーフサーチselect = dom.querySelector(".js-safe-search");
+    const 画質select = dom.querySelector(".js-definition");
+    const 長さselect = dom.querySelector(".js-duration");
     const 検索期間_有効 = dom.querySelector(".js-date-enable");
     const 検索期間_from = dom.querySelector(".js-date-from");
     const 検索期間_to = dom.querySelector(".js-date-to");
@@ -728,8 +755,12 @@
       const チャンネルid = チャンネルinput.value;
       const from日時文字列 = 検索期間_有効.checked ? 検索期間_from.value : "";
       const to日時文字列 = 検索期間_有効.checked ? 検索期間_to.value : "";
+      const 地域 = 地域select.value || "";
+      const セーフサーチ = セーフサーチselect.value || "";
+      const 画質 = 画質select.value || "";
+      const 長さ = 長さselect.value || "";
       検索ボタン有効管理クラス.apiコール開始();
-      on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, "").then(result => {
+      on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, 地域, セーフサーチ, 画質, 長さ, "").then(result => {
         検索ボタン有効管理クラス.apiコール終了();
         console.log(result);
         if (result == null) {
@@ -784,6 +815,10 @@
       const ソート方式 = dom.querySelector("[name=search-order]:checked").value;
       const 検索キーワード = キーワードinput.value;
       const チャンネルid = チャンネルinput.value;
+      const 地域 = 地域select.value || "";
+      const セーフサーチ = セーフサーチselect.value || "";
+      const 画質 = 画質select.value || "";
+      const 長さ = 長さselect.value || "";
       const from日時文字列 = 検索期間_有効.checked ? 検索期間_from.value : "";
       const to日時文字列 = 検索期間_有効.checked ? 検索期間_to.value : "";
       if (次ページの検索条件 == null) {
@@ -791,7 +826,7 @@
         return;
       }
       検索ボタン有効管理クラス.apiコール開始();
-      on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, 次ページの検索条件.pageToken).then(result => {
+      on検索実行(検索対象, ソート方式, 検索キーワード, チャンネルid, from日時文字列, to日時文字列, 地域, セーフサーチ, 画質, 長さ, 次ページの検索条件.pageToken).then(result => {
         検索ボタン有効管理クラス.apiコール終了();
         console.log(result);
         if (result == null) {
@@ -850,7 +885,11 @@
       キーワードinput,
       検索期間_有効,
       検索期間_from,
-      検索期間_to
+      検索期間_to,
+      地域select,
+      セーフサーチselect,
+      画質select,
+      長さselect
     );
   }
   function チャンネルをNG追加(チャンネルID) {
@@ -932,18 +971,23 @@
     }
   }
 </script>
-<div id="overlay-white" style="background: #0000007a;position: absolute;top: 0;bottom: 0;left: 0;right: 0;z-index: 1;"></div>
-<div id="google-oauth-overlay" style="display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;">
-  <div id="get-code" class="js-get-code" style="width:500px;padding:10px;border:solid 1px silver;background-color: white;">
+<div id="overlay-white" style="background: #0000007a;position: absolute;top: 0;bottom: 0;left: 0;right: 0;z-index: 1;">
+</div>
+<div id="google-oauth-overlay"
+  style="display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;">
+  <div id="get-code" class="js-get-code"
+    style="width:500px;padding:10px;border:solid 1px silver;background-color: white;">
     <h4>STEP 1/3</h4>
     <h5>クライアントID</h5>
     <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-id">
     <h5>クライアントシークレット</h5>
     <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-client-secret">
     <h5>リダイレクトURL</h5>
-    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-redirect-url" title="GoogleApiコンソールの認証情報＞OAuth2.0クライアント＞承認済みのリダイレクト URI に値を入れる。ファイル名含む完全一致で判定される。OAuth同意画面 ではない。">
+    <input type="" style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-redirect-url"
+      title="GoogleApiコンソールの認証情報＞OAuth2.0クライアント＞承認済みのリダイレクト URI に値を入れる。ファイル名含む完全一致で判定される。OAuth同意画面 ではない。">
     <h5>スコープ</h5>
-    <textarea style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-scope" title="ドキュメントに書かれているURLと完全一致の必要あり。最後にスラッシュを付けたり消したりしてもNG"></textarea>
+    <textarea style="width:100%;padding:5px;font-family: monospace;" class="js-oauth-scope"
+      title="ドキュメントに書かれているURLと完全一致の必要あり。最後にスラッシュを付けたり消したりしてもNG"></textarea>
     <button class="js-start-oauth">oAuth認証開始</button>
     <div>
       <ul>
@@ -982,7 +1026,8 @@
     <div class="js-error-message" style="color:red;font-weight: bold;"></div>
   </div>
 </div>
-<div id="about-overlay" style="visibility:hidden;display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;background-color: #00000075;">
+<div id="about-overlay"
+  style="visibility:hidden;display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;background-color: #00000075;">
   <div style="width:700px;padding:10px;border:solid 1px silver;background-color: white;">
     <h4>Youtubeをapiで検索するツール</h4>
     <ul style="padding-left: 20px;">
@@ -995,7 +1040,8 @@
     <div style="display: flex;justify-content: center;"><button id="about-close">aboutを閉じる</button></div>
   </div>
 </div>
-<div id="import-export-overlay" style="visibility:hidden;display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;background-color: #00000075;">
+<div id="import-export-overlay"
+  style="visibility:hidden;display:flex;align-items: center;justify-content: center;height: 100vh;position: absolute;width: 100vw;z-index: 2;background-color: #00000075;">
   <div style="min-width:700px;padding:10px;border:solid 1px silver;background-color: white;">
     <h4>インポート/エクスポート</h4>
     <textarea id="import-export-value" style="width: 100%;height: 10em;" wrap="off"></textarea>
@@ -1005,7 +1051,8 @@
     </div>
   </div>
 </div>
-<div id="search-ui" style="box-sizing: border-box;padding: 10px;display: flex;flex-direction: column;    height: 100vh;">
+<div id="search-ui"
+  style="box-sizing: border-box;padding: 10px;display: flex;flex-direction: column;    height: 100vh;">
   <!-- 検索フォーム -->
   <header style="flex:0 0 auto;background-color:white;display:flex;border-bottom:2px solid silver;padding:10px;">
     <div style="flex:1 1 0;display:flex;flex-direction:column;">
@@ -1038,6 +1085,37 @@
       <div>検索対象キーワード</div>
       <div style="margin-left:10px;">
         <input type="search" style="width:100%;" class="js-keyword">
+      </div>
+      <div style="display:flex;">
+        <div>地域</div>
+        <select class="js-region">
+          <option value="">指定なし</option>
+          <option value="JP">日本</option>
+          <option value="US">アメリカ</option>
+        </select>
+        <div style="flex:0 0 5px;">/</div>
+        <div>セーフサーチ</div>
+        <select class="js-safe-search">
+          <option value="">規定値</option>
+          <option value="none">制限なし</option>
+          <option value="strict">全て除外</option>
+        </select>
+        <div style="flex:0 0 5px;">/</div>
+        <div>画質</div>
+        <select class="js-definition">
+          <option value="">指定なし</option>
+          <option value="HD">HD</option>
+          <option value="SD">SD</option>
+        </select>
+        <div style="flex:0 0 5px;">/</div>
+        <div>長さ</div>
+        <select class="js-duration">
+          <option value="">指定なし</option>
+          <option value="long">20分～無制限</option>
+          <option value="medium">4分～20分</option>
+          <option value="short">0分～4分</option>
+        </select>
+        <div style="flex:1 1 0;"></div>
       </div>
     </div>
     <div style="flex:0 0 10px;">
