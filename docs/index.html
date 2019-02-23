@@ -650,7 +650,7 @@
     if (次ページトークン) {
       getVidParams.push(`pageToken=${次ページトークン}`);
     }
-    検索条件を保存する(検索対象, ソート方式, チャンネルid, 検索キーワード, from日時文字列 != "" && to日時文字列 != "", from日時文字列, to日時文字列);
+    検索条件を保存する(検索対象, ソート方式, チャンネルid, 検索キーワード, from日時文字列 != "" && to日時文字列 != "", from日時文字列, to日時文字列, 地域, セーフサーチ, 画質, 長さ);
     return apiを投げる(`https://www.googleapis.com/youtube/v3/search?${getVidParams.join("&")}`, setting.アクセストークン).then(r => {
       if (r.error) {
         return Promise.reject(new Error("動画ID一覧の取得に失敗しました。\n" + JSON.stringify(r, null, "  ")));
