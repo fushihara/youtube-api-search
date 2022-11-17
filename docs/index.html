@@ -12,6 +12,12 @@
   .get-code {
     width: 500px;
   }
+  .add-playlist {
+    background-color: red;
+  }
+  .add-playlist:disabled {
+    background-color: initial;
+  }
 </style>
 <script>
   NodeList.prototype.forEach = Array.prototype.forEach;
@@ -19,6 +25,7 @@
   const localStorageNgChannelKey = `3f62f06j`; //NGチャンネル一覧。無数に増える
   const localStorageQuerySaveKey = `ncamp558`; // 検索クエリの復元用
   const localStorageVideoFavoriteKey = `k1lmf5q3`; //動画ごとのfavの色。無数に増える。
+  const localStoragePlayListKey = `aojjrdy5`;
   const お気に入りで使える色一覧 = [];
   for (let i = 0; i <= 360; i += 50) {
     お気に入りで使える色一覧.push(`hsla(${i}, 100%, 90%, 1)`);
@@ -26,11 +33,13 @@
   const 使っているlocalStorageの接頭語 = [localStorageKey, localStorageNgChannelKey, localStorageQuerySaveKey, localStorageVideoFavoriteKey];
   let アクセストークン自動更新が有効 = false; //trueにした段階でsetTimeoutを指定し、一度falseになったらリロードしない限り有効にはならん。
   let 検索ボタン有効管理クラス;
+  let playListItemManager;
   window.addEventListener(
     "DOMContentLoaded",
     (e) => {
       // 変数名のインスタンスをセット
       検索ボタン有効管理クラス = new 検索ボタン有効管理(document.querySelector(".js-clear-search"), document.querySelector(".js-add-search"));
+      playListItemManager = new PlayListItemManager();
       // エレメントにイベントをセット
       検索UIのセットアップ(document.querySelector("#search-ui"));
       document.querySelector(".js-start-oauth").addEventListener("click", () => {
@@ -148,6 +157,12 @@
           アクセストークン取得view.style.display = "none";
           アクセストークン更新view.style.display = "none";
         }
+      }
+      document.querySelector(".js-playlist-id").value = localStorage[localStoragePlayListKey] ?? "";
+      const accessToken = 今の保存設定を取得()?.アクセストークン ?? "";
+      const playListId = document.querySelector(".js-playlist-id").value ?? "";
+      if (accessToken != "" && playListId != "") {
+        playListItemManager.loadPlayListItemList(playListId, accessToken);
       }
     },
     false
@@ -460,30 +475,31 @@
     dom.style.borderBottom = "solid 1px silver";
     dom.style.width = "100%";
     dom.innerHTML = `
-<a style="flex:0 0 auto;position: relative;" href="" class="js-link">
-  <div style="width: 100%;height: 187px;overflow: hidden;position: relative;">
-    <img src="" style="object-fit: contain;width: 250px;height: 187px;" class="js-img">
-    <span style="background: #000000a6;color: white;position: absolute;top: 0;left: 0;padding: 2px;font-size:10px;display:none;" class="js-live-parent">
-      <span style="color:red;">●</span>
-      <span class="js-live-duration">10:00</span>
-    </span>
-    <span style="background: #000000a6;color: white;position: absolute;bottom: 0;right: 0;padding: 2px;font-size:10px;" class="js-duration"></span>
-    <span style="background: #000000a6;color: white;position: absolute;bottom: 0;left: 0;padding: 2px;font-size:10px;" class="js-postdate"></span>
+  <a style="flex:0 0 auto;position: relative;" href="" class="js-link">
+    <div style="width: 100%;height: 187px;overflow: hidden;position: relative;">
+      <img src="" style="object-fit: contain;width: 250px;height: 187px;" class="js-img">
+      <span style="background: #000000a6;color: white;position: absolute;top: 0;left: 0;padding: 2px;font-size:10px;display:none;" class="js-live-parent">
+        <span style="color:red;">●</span>
+        <span class="js-live-duration">10:00</span>
+      </span>
+      <span style="background: #000000a6;color: white;position: absolute;bottom: 0;right: 0;padding: 2px;font-size:10px;" class="js-duration"></span>
+      <span style="background: #000000a6;color: white;position: absolute;bottom: 0;left: 0;padding: 2px;font-size:10px;" class="js-postdate"></span>
+    </div>
+  </a>
+  <div style="display:flex;flex-direction:column;margin-left: 10px;overflow: hidden;">
+  <div style="flex:0 0 auto;font-size: 30px;"><span class="js-number"></span><span class="js-title"></span></div>
+  <div style="flex:0 0 auto;">
+    <a href=""  class="js-user">ユーザ名</a>
+    <button style="font-size: 9px;vertical-align: middle;" class="js-user-id-set-query">ユーザIDで絞り込み</button>
+    <button style="font-size: 9px;vertical-align: middle;" class="js-user-id-ng">ユーザIDをNG追加</button>
+    <button style="font-size: 9px;vertical-align: middle;" class="js-n-day-set-query">+- N日の日付を指定</button>
+    <button style="font-size: 9px;vertical-align: middle;" class="js-add-playlist add-playlist">プレイリスト追加</button>
   </div>
-</a>
-<div style="display:flex;flex-direction:column;margin-left: 10px;overflow: hidden;">
-<div style="flex:0 0 auto;font-size: 30px;"><span class="js-number"></span><span class="js-title"></span></div>
-<div style="flex:0 0 auto;">
-  <a href=""  class="js-user">ユーザ名</a>
-  <button style="font-size: 9px;vertical-align: middle;" class="js-user-id-set-query">ユーザIDで絞り込み</button>
-  <button style="font-size: 9px;vertical-align: middle;" class="js-user-id-ng">ユーザIDをNG追加</button>
-  <button style="font-size: 9px;vertical-align: middle;" class="js-n-day-set-query">+- N日の日付を指定</button>
-</div>
-<div style="flex:0 0 auto;height: 100px;overflow-y: scroll;background-color: #dadada;font-size:11px;" class="js-description">説明文ほげほげ<br>かげかげ</div>
-<div style="flex: 0 0 auto;text-overflow: ellipsis;white-space: nowrap;width: 100%;overflow: hidden;font-size: 10px;" class="js-tags">任天堂/スイッチ/あれ/これ</div>
-<div style="flex:0 0 auto;" class="js-statics">視聴数:<span class="js-watch-count"></span> Like:<span class="js-like-count"></span> UnLile:<span class="js-unlike-count"></span> コメント:<span class="js-comment-count"></span></div>
-</div>
-`;
+  <div style="flex:0 0 auto;height: 100px;overflow-y: scroll;background-color: #dadada;font-size:11px;" class="js-description">説明文ほげほげ<br>かげかげ</div>
+  <div style="flex: 0 0 auto;text-overflow: ellipsis;white-space: nowrap;width: 100%;overflow: hidden;font-size: 10px;" class="js-tags">任天堂/スイッチ/あれ/これ</div>
+  <div style="flex:0 0 auto;" class="js-statics">視聴数:<span class="js-watch-count"></span> Like:<span class="js-like-count"></span> UnLile:<span class="js-unlike-count"></span> コメント:<span class="js-comment-count"></span></div>
+  </div>
+  `;
     dom.querySelector(".js-link").href = `https://www.youtube.com/watch?v=${vid}`;
     dom.querySelector(".js-img").setAttribute("src", サムネURL);
     const liveマーク = {
@@ -641,6 +657,21 @@
       検索期間_from.value = new Date(投稿日時DateObj.getTime() - nDays * 24 * 60 * 60 * 1000).toLocaleString();
       検索期間_to.value = new Date(投稿日時DateObj.getTime() + nDays * 24 * 60 * 60 * 1000).toLocaleString();
     });
+    const playListId = String(document.querySelector(".js-playlist-id").value);
+    let playlistAdded = false;
+    if (playListId != "") {
+      if (playListItemManager.checkAlreadyRegisterd(playListId, vid)) {
+        playlistAdded = true;
+      }
+    }
+    if (playlistAdded) {
+      dom.querySelector(".js-add-playlist").disabled = true;
+      dom.querySelector(".js-add-playlist").innerText = "登録済み";
+    } else {
+      dom.querySelector(".js-add-playlist").addEventListener("click", (e) => {
+        動画をプレイリストに追加(vid, e.currentTarget);
+      });
+    }
 
     dom.querySelector(".js-description").innerText = 説明テキスト;
     dom.querySelector(".js-tags").innerText = タグ一覧.join(" / ");
@@ -948,6 +979,44 @@
       長さselect
     );
   }
+  async function 動画をプレイリストに追加(動画ID, buttonElement) {
+    buttonElement.disabled = true;
+    const playListId = String(document.querySelector(".js-playlist-id").value);
+    if (playListId.trim() == "") {
+      alert("プレイリストが未指定です");
+      buttonElement.disabled = false;
+      return;
+    }
+    localStorage[localStoragePlayListKey] = playListId;
+    const originalText = buttonElement.innerText;
+    buttonElement.innerText = "登録中";
+    const acessToken = 今の保存設定を取得().アクセストークン;
+    await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet`, {
+      method: "POST",
+      headers: {Authorization: `Bearer ${acessToken}`},
+      body: JSON.stringify({
+        snippet: {
+          playlistId: playListId,
+          resourceId: {
+            kind: "youtube#video",
+            videoId: 動画ID,
+          },
+        },
+      }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        buttonElement.innerText = "プレイリスト登録済み";
+        playListItemManager.addVideo(playListId, 動画ID);
+        console.log(res);
+      })
+      .catch((e) => {
+        buttonElement.innerText = originalText;
+        buttonElement.disabled = false;
+        alert(`プレイリストの登録失敗\n${e}`);
+        console.error(e);
+      });
+  }
   function チャンネルをNG追加(チャンネルID) {
     const 削除するdom一覧 = [];
     for (let i of document.querySelector(".js-result").children) {
@@ -1024,6 +1093,80 @@
         //this.追記して検索ボタン.style.opacity = ".5";
         this.追記して検索ボタン.style.color = "silver";
       }
+    }
+  }
+  class PlayListItemManager {
+    constructor() {
+      // {playListId:videoId[]}
+      this.playListDataList = {};
+      this.localStorageKey = `kidxljkz`;
+      this._loadDataFromLocalStorage();
+    }
+    addVideo(playListId, videoId) {
+      const a = this.playListDataList[playListId];
+      if (a == null) {
+        this.playListDataList[playListId] = [videoId];
+      } else {
+        a.push(videoId);
+      }
+      localStorage.setItem(`${this.localStorageKey}-${playListId}`, JSON.stringify(this.playListDataList[playListId]));
+    }
+    _loadDataFromLocalStorage() {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key.startsWith(`${this.localStorageKey}-`)) {
+          continue;
+        }
+        try {
+          const data = JSON.parse(localStorage[key]);
+          const playListId = key.substring(`${this.localStorageKey}-`.length);
+          this.playListDataList[playListId] = data;
+        } catch (e) {}
+      }
+    }
+    /**
+     * 指定のIDの動画が、指定のプレイリストに登録済みかをboolで返す
+     * DOM作る時に何度も呼ばれる想定なので軽くする
+     */
+    checkAlreadyRegisterd(playListId, videoId) {
+      const a = this.playListDataList[playListId];
+      if (a == null) {
+        return false;
+      }
+      return a.includes(videoId);
+    }
+    /** apiを使って指定のIDのプレイリストに含まれている動画一覧を取得 */
+    async loadPlayListItemList(playListId, acessToken) {
+      let nextPageToken = null;
+      const videoIdList = [];
+      while (true) {
+        let url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playListId}`;
+        if (nextPageToken != null) {
+          url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playListId}&pageToken=${nextPageToken}`;
+        }
+        const jsonData = await fetch(url, {
+          method: "GET",
+          headers: {Authorization: `Bearer ${acessToken}`},
+        })
+          .then((r) => r.json())
+          .catch((e) => {
+            nextPageToken = "";
+            return {};
+          });
+        for (let v of jsonData?.items) {
+          const videoId = v?.snippet?.resourceId?.videoId ?? "";
+          if (videoId == "") {
+            continue;
+          }
+          videoIdList.push(videoId);
+        }
+        nextPageToken = jsonData?.nextPageToken ?? "";
+        if (nextPageToken == "") {
+          break;
+        }
+      }
+      this.playListDataList[playListId] = videoIdList;
+      localStorage.setItem(`${this.localStorageKey}-${playListId}`, JSON.stringify(this.playListDataList[playListId]));
     }
   }
 </script>
@@ -1210,7 +1353,7 @@ https://www.googleapis.com/auth/youtube.force-ssl</textarea
         <button data-from="2018/12/06 23:00" data-to="2018/12/07 00:00">スマブラSP発売の瞬間</button>
       </div>
       <div>プレイリスト</div>
-      <input type="text" style="margin: 0 10px; width: 50%" class="js-playlist-id/>
+      <input type="text" style="margin: 0 10px; width: 50%" class="js-playlist-id" />
       <div style="margin-left: 10px"></div>
       <div>検索結果</div>
       <div style="margin-left: 10px" class="js-search-result"></div>
