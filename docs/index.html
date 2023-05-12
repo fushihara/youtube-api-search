@@ -1169,6 +1169,83 @@
       localStorage.setItem(`${this.localStorageKey}-${playListId}`, JSON.stringify(this.playListDataList[playListId]));
     }
   }
+  /// 「プレイリスト」テキストボックスのIDのプレイリストに複数の動画IDを登録する
+  async function importToPlayList(videoIdList) {
+    const importTargetPlayListId = String(document.querySelector(".js-playlist-id").value);
+    console.log(`プレイリストID`, `"${importTargetPlayListId}"`);
+    console.log("動画IDの一覧", videoIdList);
+    const allowImport = confirm(`動画IDの一斉登録をして宜しいですか？詳細はdevtoolのログに出ています`);
+    if (allowImport == false) {
+      console.log(`インポートを中断します`);
+      return;
+    }
+    console.log(`インポート開始`);
+    const acessToken = 今の保存設定を取得().アクセストークン;
+    let pageToken = null;
+    const playListVideoIdSet = new Set();
+    while (true) {
+      const searchParam = new URLSearchParams();
+      searchParam.append("part", "snippet");
+      searchParam.append("playlistId", importTargetPlayListId);
+      searchParam.append("maxResults", "50");
+      if (pageToken != null) {
+        searchParam.append("pageToken", pageToken);
+      }
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?${searchParam}`, {
+        headers: {Authorization: `Bearer ${acessToken}`},
+      }).then((r) => r.json());
+      console.log(res);
+      let isEndRequest = false;
+      const beforeItemCount = playListVideoIdSet.size;
+      for (let v of res.items) {
+        playListVideoIdSet.add(v.snippet.resourceId.videoId);
+      }
+      const afterItemCount = playListVideoIdSet.size;
+      if (beforeItemCount == afterItemCount) {
+        isEndRequest = true;
+      }
+      if (typeof res.nextPageToken == "string" && res.nextPageToken != "") {
+        pageToken = String(res.nextPageToken);
+      } else {
+        isEndRequest = true;
+      }
+      if (isEndRequest) {
+        break;
+      }
+    }
+    console.log(`追加前にプレイリストに登録済みの動画ID一覧`, [...playListVideoIdSet.values()]);
+    const addVideoIdSet = new Set();
+    for (let v of videoIdList) {
+      if (playListVideoIdSet.has(v) == false) {
+        addVideoIdSet.add(v);
+      }
+    }
+    console.log(`今からプレイリストに追加する予定の動画ID一覧`, [...addVideoIdSet.values()]);
+    for (let videoId of addVideoIdSet) {
+      const searchParam = new URLSearchParams();
+      searchParam.append("part", "snippet");
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?${searchParam}`, {
+        headers: {Authorization: `Bearer ${acessToken}`},
+        method: "POST",
+        body: JSON.stringify({
+          snippet: {
+            playlistId: importTargetPlayListId,
+            resourceId: {
+              kind: "youtube#video",
+              videoId: videoId,
+            },
+          },
+        }),
+      });
+      if (res.ok == false) {
+        const responseJson = await res.json();
+        console.error(`${videoId} の登録に失敗`, responseJson);
+        break;
+      }
+      console.log(`${videoId} を登録`);
+    }
+    console.log(`全て完了`);
+  }
 </script>
 <div id="overlay-white" style="background: #0000007a; position: absolute; top: 0; bottom: 0; left: 0; right: 0; z-index: 1"></div>
 <div id="google-oauth-overlay" style="display: flex; align-items: center; justify-content: center; height: 100vh; position: absolute; width: 100vw; z-index: 2">
